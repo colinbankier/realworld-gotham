@@ -1,3 +1,14 @@
+#[macro_use]
+extern crate diesel;
+
+mod conduit;
+mod db;
+mod models;
+mod schema;
+
+#[cfg(test)]
+mod test_helpers;
+
 use gotham::router::builder::*;
 use gotham::router::Router;
 use gotham::state::State;
