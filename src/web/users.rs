@@ -24,57 +24,30 @@ pub struct UserResponse {
 }
 
 pub fn register(mut state: State) -> Box<HandlerFuture> {
-    let repo = Repo::try_borrow_from(&state).unwrap_or_else(|| panic!("No repo found in state."));
-    // if let None = repo {
-    //     return Box::new(future::ok((state, create_empty_response(&state, StatusCode::INTERNAL_SERVER_ERROR))));
-    // }
-    let empty = create_empty_response(&state, StatusCode::OK);
+    let repo = Repo::borrow_from(&state).clone();
     let f = Body::take_from(&mut state)
         .concat2()
-        .then(|body| match body {
-            Ok(valid_body) => {
-                let reg =
-                    serde_json::from_str::<Registration>(from_utf8(&valid_body.to_vec()).unwrap());
-                future::ok(reg)
+        .map_err(|e| e.into_handler_error())
+        .and_then(|body| {
+            let reg = serde_json::from_str::<Registration>(from_utf8(&body.to_vec()).unwrap());
+            match reg {
+                Ok(registration) => future::ok(registration),
+                Err(e) => future::err(e.into_handler_error()),
             }
-            Err(e) => future::err(e),
         })
-        .then(|body| match body {
-            Ok(valid_body) => {
-                let res = create_empty_response(&state, StatusCode::OK);
-                future::ok((state, res))
-            }
+        .and_then(|registration| {
+            users::insert(repo, registration.user).map_err(|e| e.into_handler_error())
+        })
+        .then(|result| match result {
+            Ok(user_result) => match user_result {
+                Ok(user) => {
+                    let body = serde_json::to_string(&user).expect("Failed to serialize user.");
+                    let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, body);
+                    future::ok((state, res))
+                }
+                Err(e) => future::err((state, e.into_handler_error())),
+            },
             Err(e) => future::err((state, e.into_handler_error())),
         });
     Box::new(f)
-
-    // let res = f.and_then(move |registration|{
-    //     users::insert(repo.clone(), registration.user)
-    //     .map_err(|e| e.into_handler_error())}
-    //         // .and_then(|user_result| match user_result {
-    //         //     Ok(user) => {
-    //         // let json = serde_json::to_string(&UserResponse { user }).expect("Error encoding json");
-    //         //     let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, json);
-    //         //     Box::new(future::ok((state, res)))
-    //         //     },
-    //         //     Err(e) => Box::new(future::err((state, e.into_handler_error())))
-    //         // }
-    //         // )
-    //         // .map_err(|e| ( state, e.into_handler_error() ))
-    //     );
-    // Box::new(res.then(|result| match result {
-    //     Ok(success) => Ok((state, empty)),
-    //     Err(e) => Err((state, e.into_handler_error()))
-    // }))
-    // res
 }
-// pub fn register(
-//     repo: AppData<Repo>,
-//     registration: Json<Registration>,
-// ) -> Result<Json<UserResponse>, StatusCode> {
-//     let result = await! { users::insert(repo.clone(), registration.0.user) };
-
-//     result
-//         .map(|user| Json(UserResponse { user }))
-//         .map_err(|e| diesel_error(&e))
-// }
