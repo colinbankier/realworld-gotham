@@ -4,6 +4,7 @@ use futures::future::{Future,poll_fn};
 use r2d2::{Pool, PooledConnection};
 use std::env;
 use tokio_threadpool::{BlockingError, blocking };
+use gotham::state::StateData;
 
 pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type Connection = PooledConnection<ConnectionManager<PgConnection>>;
@@ -43,6 +44,8 @@ impl Repo {
         )
     }
 }
+
+impl StateData for Repo {}
 
 pub fn connection_pool() -> ConnectionPool {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");

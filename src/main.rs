@@ -5,6 +5,7 @@ mod conduit;
 mod db;
 mod models;
 mod schema;
+mod web;
 
 #[cfg(test)]
 mod test_helpers;
