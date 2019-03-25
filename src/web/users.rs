@@ -1,3 +1,4 @@
+use failure::Error;
 use gotham::handler::{HandlerFuture, IntoHandlerError};
 use gotham::helpers::http::response::{create_empty_response, create_response};
 use gotham::state::{FromState, State};
@@ -23,18 +24,42 @@ pub struct UserResponse {
     user: User,
 }
 
+#[derive(Debug)]
+pub enum ExtractError {
+    SerdeError(serde_json::Error),
+    HyperError(hyper::Error),
+    Utf8Error(std::str::Utf8Error),
+}
+
+fn extract_json<T>(mut state: State) -> impl Future<Item = T, Error = ExtractError>
+where
+    T: serde::de::DeserializeOwned,
+{
+    Body::take_from(&mut state)
+        .concat2()
+        .map_err(ExtractError::HyperError)
+        .and_then(|body| {
+            let b = body.to_vec();
+            from_utf8(&b)
+                .map_err(ExtractError::Utf8Error)
+                .and_then(|s| serde_json::from_str::<T>(s).map_err(ExtractError::SerdeError))
+        })
+}
+
 pub fn register(mut state: State) -> Box<HandlerFuture> {
     let repo = Repo::borrow_from(&state).clone();
-    let f = Body::take_from(&mut state)
-        .concat2()
-        .map_err(|e| e.into_handler_error())
-        .and_then(|body| {
-            let reg = serde_json::from_str::<Registration>(from_utf8(&body.to_vec()).unwrap());
-            match reg {
-                Ok(registration) => future::ok(registration),
-                Err(e) => future::err(e.into_handler_error()),
-            }
-        })
+    // let f = Body::take_from(&mut state)
+    //     .concat2()
+    //     .map_err(|e| e.into_handler_error())
+    //     .and_then(|body| {
+    //         let reg = serde_json::from_str::<Registration>(from_utf8(&body.to_vec()).unwrap());
+    //         match reg {
+    //             Ok(registration) => future::ok(registration),
+    //             Err(e) => future::err(e.into_handler_error()),
+    //         }
+    //     })
+    let f = extract_json::<Registration>(state)
+        // .map_err(|e| e.into_handler_error(e))
         .and_then(|registration| {
             users::insert(repo, registration.user).map_err(|e| e.into_handler_error())
         })
