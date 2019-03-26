@@ -6,6 +6,7 @@ mod db;
 mod models;
 mod schema;
 mod web;
+mod diesel_middleware;
 
 #[cfg(test)]
 mod test_helpers;
@@ -20,7 +21,7 @@ pub fn say_hello(state: State) -> (State, &'static str) {
     (state, HELLO_ROUTER)
 }
 
-fn router() -> Router {
+pub fn router() -> Router {
     build_simple_router(|route| {
         route.get("/").to(say_hello);
     })

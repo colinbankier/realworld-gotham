@@ -1,5 +1,5 @@
 use failure::Error;
-use gotham::handler::{HandlerFuture, IntoHandlerError};
+use gotham::handler::{HandlerError, HandlerFuture, IntoHandlerError};
 use gotham::helpers::http::response::{create_empty_response, create_response};
 use gotham::state::{FromState, State};
 use hyper::{Body, StatusCode};
@@ -24,42 +24,31 @@ pub struct UserResponse {
     user: User,
 }
 
-#[derive(Debug)]
-pub enum ExtractError {
-    SerdeError(serde_json::Error),
-    HyperError(hyper::Error),
-    Utf8Error(std::str::Utf8Error),
+fn bad_request<E>(e: E) -> HandlerError
+where
+    E: std::error::Error + Send + 'static,
+{
+    e.into_handler_error().with_status(StatusCode::BAD_REQUEST)
 }
 
-fn extract_json<T>(mut state: State) -> impl Future<Item = T, Error = ExtractError>
+fn extract_json<T>(state: &mut State) -> impl Future<Item = T, Error = HandlerError>
 where
     T: serde::de::DeserializeOwned,
 {
-    Body::take_from(&mut state)
+    Body::take_from(state)
         .concat2()
-        .map_err(ExtractError::HyperError)
+        .map_err(bad_request)
         .and_then(|body| {
             let b = body.to_vec();
             from_utf8(&b)
-                .map_err(ExtractError::Utf8Error)
-                .and_then(|s| serde_json::from_str::<T>(s).map_err(ExtractError::SerdeError))
+                .map_err(bad_request)
+                .and_then(|s| serde_json::from_str::<T>(s).map_err(bad_request))
         })
 }
 
 pub fn register(mut state: State) -> Box<HandlerFuture> {
     let repo = Repo::borrow_from(&state).clone();
-    // let f = Body::take_from(&mut state)
-    //     .concat2()
-    //     .map_err(|e| e.into_handler_error())
-    //     .and_then(|body| {
-    //         let reg = serde_json::from_str::<Registration>(from_utf8(&body.to_vec()).unwrap());
-    //         match reg {
-    //             Ok(registration) => future::ok(registration),
-    //             Err(e) => future::err(e.into_handler_error()),
-    //         }
-    //     })
-    let f = extract_json::<Registration>(state)
-        // .map_err(|e| e.into_handler_error(e))
+    let f = extract_json::<Registration>(&mut state)
         .and_then(|registration| {
             users::insert(repo, registration.user).map_err(|e| e.into_handler_error())
         })
@@ -75,4 +64,37 @@ pub fn register(mut state: State) -> Box<HandlerFuture> {
             Err(e) => future::err((state, e.into_handler_error())),
         });
     Box::new(f)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::models::NewUser;
+    use crate::test_helpers::generate;
+    use gotham::test::TestServer;
+    use crate::db::Repo;
+    use serde_json::{json, Value};
+    use hyper::StatusCode;
+    use crate::router;
+
+    #[test]
+   fn register_and_login() {
+
+        let test_server = TestServer::new(router()).unwrap();
+        let response = test_server
+            .client()
+            .get("http://localhost/")
+            .perform()
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let server = TestServer::new(Repo::new());
+        let user = generate::new_user();
+
+        await! {register_user(&server, &user)};
+        let token = await! {login_user(&server, &user)};
+        let user_details = await! { get_user_details(&server, &token)};
+
+        assert_eq!(user_details["user"]["username"], user.username);
+        assert_eq!(user_details["user"]["email"], user.email);
+    }
 }
