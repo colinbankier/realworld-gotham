@@ -1,13 +1,11 @@
-use failure::Error;
 use gotham::handler::{HandlerError, HandlerFuture, IntoHandlerError};
-use gotham::helpers::http::response::{create_empty_response, create_response};
+use gotham::helpers::http::response::{ create_empty_response, create_response };
 use gotham::state::{FromState, State};
 use hyper::{Body, StatusCode};
 extern crate mime;
 use futures::{future, Future, Stream};
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
-use std::convert::From;
 use std::str::from_utf8;
 
 use crate::conduit::users;
@@ -66,35 +64,124 @@ pub fn register(mut state: State) -> Box<HandlerFuture> {
     Box::new(f)
 }
 
+pub fn login(mut state: State) -> Box<HandlerFuture> {
+    let repo = Repo::borrow_from(&state).clone();
+    let f = extract_json::<NewUser>(&mut state)
+    .and_then(|user| {
+        users::find_by_email_password(repo.clone(), user.email, user.password)
+        .map_err(|e| e.into_handler_error())
+    })
+    .then(|result| match result {
+        Ok(Ok(user)) => {
+            let response = UserResponse{
+                user: User {
+                token: Some(encode_token(user.id)),
+                ..user
+            }};
+            let body = serde_json::to_string(&response).expect("Failed to serialize user.");
+            let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, body);
+            future::ok((state, res))
+        },
+        Ok(Err(diesel::result::Error::NotFound)) => {
+            let res = create_empty_response(&state, StatusCode::UNAUTHORIZED);
+            future::ok((state, res))
+        },
+        Err(e) => e.into_handler_error()
+    });
+    Box::new(f)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::models::NewUser;
-    use crate::test_helpers::generate;
-    use gotham::test::TestServer;
     use crate::db::Repo;
-    use serde_json::{json, Value};
-    use hyper::StatusCode;
+    use crate::models::NewUser;
     use crate::router;
+    use crate::test_helpers::generate;
+    use futures::future::Future;
+    use futures::stream::Stream;
+    use gotham::test::{TestResponse, TestServer};
+    use hyper::{header::HeaderValue, StatusCode};
+    use serde_json::{json, Value};
+
+    use std::str::from_utf8;
 
     #[test]
-   fn register_and_login() {
-
-        let test_server = TestServer::new(router()).unwrap();
-        let response = test_server
-            .client()
-            .get("http://localhost/")
-            .perform()
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-        let server = TestServer::new(Repo::new());
+    fn register_and_login() {
+        let server = TestServer::new(router(Repo::new())).unwrap();
         let user = generate::new_user();
 
-        await! {register_user(&server, &user)};
-        let token = await! {login_user(&server, &user)};
-        let user_details = await! { get_user_details(&server, &token)};
+        register_user(&server, &user);
+        let token = login_user(&server, &user);
+        let user_details = get_user_details(&server, &token);
 
         assert_eq!(user_details["user"]["username"], user.username);
         assert_eq!(user_details["user"]["email"], user.email);
     }
+
+    pub fn response_json(res: TestResponse) -> Value {
+        let body = res.read_body().unwrap();
+        serde_json::from_str(from_utf8(&body).unwrap()).expect("Could not parse body.")
+    }
+
+    fn register_user<'a>(server: &'a TestServer, user: &'a NewUser) -> Value {
+        let res = server
+            .client()
+            .post(
+                "/api/users",
+                json!({
+                    "user": {
+                        "email": user.email,
+                        "password": user.password,
+                        "username": user.username,
+                    }
+                })
+                .to_string(),
+                mime::APPLICATION_JSON,
+            )
+            .perform()
+            .unwrap();
+        response_json(res)
+    }
+
+    fn login_user<'a>(server: &'a TestServer, user: &'a NewUser) -> String {
+        let res = server
+            .client()
+            .post(
+                "/api/users/login",
+                json!({
+                    "user": {
+                        "email": user.email,
+                        "password": user.password,
+                    }
+                })
+                .to_string(),
+                mime::APPLICATION_JSON,
+            )
+            .perform()
+            .unwrap();
+        assert_eq!(res.status(), 200);
+
+        let response_json = response_json(res);
+
+        assert!(response_json["user"]["token"].is_string());
+        response_json["user"]["token"]
+            .as_str()
+            .expect("Token not found")
+            .to_string()
+    }
+
+    fn get_user_details<'a>(server: &'a TestServer, token: &'a String) -> Value {
+        let res = server
+            .client()
+            .get("/api/user")
+            .with_header(
+                "Authorization",
+                HeaderValue::from_str(&format!("token: {}", token)).unwrap(),
+            )
+            .perform()
+            .unwrap();
+        assert_eq!(res.status(), 200);
+        response_json(res)
+    }
+
 }

@@ -1,12 +1,12 @@
+use futures::future::{self, Future};
+use log::{error, trace};
 use std::io;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::process;
-use log::{ error, trace };
-use futures::future::{self, Future};
 
-use gotham::middleware::{ Middleware, NewMiddleware };
 use gotham::handler::HandlerFuture;
-use gotham::state::{ State, request_id };
+use gotham::middleware::{Middleware, NewMiddleware};
+use gotham::state::{request_id, State};
 
 use crate::db::Repo;
 
@@ -16,12 +16,13 @@ pub struct DieselMiddleware {
 
 impl DieselMiddleware {
     pub fn new(repo: Repo) -> Self {
-        DieselMiddleware{repo: AssertUnwindSafe( repo )}
+        DieselMiddleware {
+            repo: AssertUnwindSafe(repo),
+        }
     }
 }
 
-impl Clone for DieselMiddleware
-{
+impl Clone for DieselMiddleware {
     fn clone(&self) -> Self {
         match catch_unwind(|| self.repo.clone()) {
             Ok(repo) => DieselMiddleware {
@@ -41,7 +42,9 @@ impl NewMiddleware for DieselMiddleware {
 
     fn new_middleware(&self) -> io::Result<Self::Instance> {
         match catch_unwind(|| self.repo.clone()) {
-            Ok(repo) => Ok(DieselMiddleware { repo: AssertUnwindSafe(repo) }),
+            Ok(repo) => Ok(DieselMiddleware {
+                repo: AssertUnwindSafe(repo),
+            }),
             Err(_) => {
                 error!(
                     "PANIC: r2d2::Pool::clone caused a panic, unable to rescue with a HTTP error"
@@ -62,7 +65,7 @@ impl Middleware for DieselMiddleware {
         Self: Sized,
     {
         trace!("[{}] pre chain", request_id(&state));
-        state.put(*self.repo);
+        state.put(self.repo.clone());
 
         let f = chain(state).and_then(move |(state, response)| {
             {
