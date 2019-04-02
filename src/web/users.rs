@@ -24,6 +24,17 @@ pub struct UserResponse {
     user: User,
 }
 
+#[derive(Deserialize)]
+pub struct AuthRequest {
+    user: AuthUser,
+}
+
+#[derive(Deserialize)]
+pub struct AuthUser {
+    email: String,
+    password: String,
+}
+
 fn bad_request<E>(e: E) -> HandlerError
 where
     E: std::error::Error + Send + 'static,
@@ -68,8 +79,9 @@ pub fn register(mut state: State) -> Box<HandlerFuture> {
 
 pub fn login(mut state: State) -> Box<HandlerFuture> {
     let repo = Repo::borrow_from(&state).clone();
-    let f = extract_json::<NewUser>(&mut state)
-        .and_then(move |user| {
+    let f = extract_json::<AuthRequest>(&mut state)
+        .and_then(move |body| {
+            let user = body.user;
             users::find_by_email_password(repo, user.email, user.password)
                 .map_err(|e| e.into_handler_error())
         })

@@ -5,19 +5,23 @@ use gotham::state::StateData;
 use r2d2::{Pool, PooledConnection};
 use std::env;
 use tokio_threadpool::{blocking, BlockingError};
+use diesel::Connection;
 
-pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
-pub type Connection = PooledConnection<ConnectionManager<PgConnection>>;
+// pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
+// pub type Connection = PooledConnection<ConnectionManager<PgConnection>>;
 
 /// A database "repository", for running database workloads.
 /// Manages a connection pool and running blocking tasks in a
 /// way that does not block the tokio event loop.
 #[derive(Clone)]
-pub struct Repo {
-    connection_pool: ConnectionPool,
+pub struct Repo<T>
+where
+    T: Connection + 'static,
+    {
+    connection_pool: Pool<ConnectionManager<T>>,
 }
 
-impl Repo {
+impl<T> Repo<T> where T: Connection {
     pub fn new() -> Self {
         Repo {
             connection_pool: connection_pool(),
@@ -26,9 +30,9 @@ impl Repo {
 
     /// Runs the given closure in a way that is safe for blocking IO to the database.
     /// The closure will be passed a `Connection` from the pool to use.
-    pub fn run<F, T>(&self, f: F) -> impl Future<Item = T, Error = BlockingError>
+    pub fn run<F, R>(&self, f: F) -> impl Future<Item = R, Error = BlockingError>
     where
-        F: FnOnce(Connection) -> T + Send + std::marker::Unpin + 'static,
+        F: FnOnce(Connection) -> R + Send + std::marker::Unpin + 'static,
         T: Send + 'static,
     {
         let pool = self.connection_pool.clone();

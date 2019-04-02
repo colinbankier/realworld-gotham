@@ -35,6 +35,7 @@ pub fn router(repo: Repo) -> Router {
         pipelines.add(new_pipeline().add(DieselMiddleware::new(repo)).build());
     let (pipelines, authenticated) = pipelines.add(
         new_pipeline()
+            // Need to customize realm, as per Guardian.VerifyHeader
             .add(JWTMiddleware::<auth::Claims>::new("secret".as_ref()))
             .build(),
     );
