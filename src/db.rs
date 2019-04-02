@@ -1,10 +1,10 @@
 use diesel::pg::PgConnection;
 use diesel::r2d2::ConnectionManager;
-use futures::future::{Future,poll_fn};
+use futures::future::{poll_fn, Future};
+use gotham::state::StateData;
 use r2d2::{Pool, PooledConnection};
 use std::env;
-use tokio_threadpool::{BlockingError, blocking };
-use gotham::state::StateData;
+use tokio_threadpool::{blocking, BlockingError};
 
 pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type Connection = PooledConnection<ConnectionManager<PgConnection>>;
@@ -26,7 +26,7 @@ impl Repo {
 
     /// Runs the given closure in a way that is safe for blocking IO to the database.
     /// The closure will be passed a `Connection` from the pool to use.
-    pub fn run<F, T>(&self, f: F) -> impl Future<Item=T, Error = BlockingError>
+    pub fn run<F, T>(&self, f: F) -> impl Future<Item = T, Error = BlockingError>
     where
         F: FnOnce(Connection) -> T + Send + std::marker::Unpin + 'static,
         T: Send + 'static,
@@ -37,10 +37,8 @@ impl Repo {
         // `f.take()` allows the borrow checker to be sure `f` is not moved into the inner closure
         // multiple times if `poll_fn` is called multple times.
         let mut f = Some(f);
-        poll_fn(move || blocking(|| (f.take().unwrap())(
-            pool.get().unwrap()
-        ))
-        // .map_err(|_| panic!("the threadpool shut down"))
+        poll_fn(
+            move || blocking(|| (f.take().unwrap())(pool.get().unwrap())), // .map_err(|_| panic!("the threadpool shut down"))
         )
     }
 }

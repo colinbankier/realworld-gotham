@@ -1,6 +1,7 @@
 use gotham::handler::{HandlerError, HandlerFuture, IntoHandlerError};
-use gotham::helpers::http::response::{ create_empty_response, create_response };
+use gotham::helpers::http::response::{create_empty_response, create_response};
 use gotham::state::{FromState, State};
+use gotham_middleware_jwt::AuthorizationToken;
 use hyper::{Body, StatusCode};
 extern crate mime;
 use futures::{future, Future, Stream};
@@ -8,6 +9,7 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use std::str::from_utf8;
 
+use crate::auth::{encode_token, Claims};
 use crate::conduit::users;
 use crate::db::Repo;
 use crate::models::{NewUser, User};
@@ -67,28 +69,50 @@ pub fn register(mut state: State) -> Box<HandlerFuture> {
 pub fn login(mut state: State) -> Box<HandlerFuture> {
     let repo = Repo::borrow_from(&state).clone();
     let f = extract_json::<NewUser>(&mut state)
-    .and_then(|user| {
-        users::find_by_email_password(repo.clone(), user.email, user.password)
-        .map_err(|e| e.into_handler_error())
-    })
-    .then(|result| match result {
+        .and_then(move |user| {
+            users::find_by_email_password(repo, user.email, user.password)
+                .map_err(|e| e.into_handler_error())
+        })
+        .then(|result| match result {
+            Ok(Ok(user)) => {
+                let response = UserResponse {
+                    user: User {
+                        token: Some(encode_token(user.id)),
+                        ..user
+                    },
+                };
+                let body = serde_json::to_string(&response).expect("Failed to serialize user.");
+                let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, body);
+                future::ok((state, res))
+            }
+            Ok(Err(diesel::result::Error::NotFound)) => {
+                let res = create_empty_response(&state, StatusCode::UNAUTHORIZED);
+                future::ok((state, res))
+            }
+            Ok(Err(e)) => future::err((state, e.into_handler_error())),
+            Err(e) => future::err((state, e.into_handler_error())),
+        });
+    Box::new(f)
+}
+
+pub fn get_user(mut state: State) -> Box<HandlerFuture> {
+    let repo = Repo::borrow_from(&state).clone();
+    let token = AuthorizationToken::<Claims>::borrow_from(&state);
+    let results = users::find(repo.clone(), token.0.claims.user_id()).then(|result| match result {
         Ok(Ok(user)) => {
-            let response = UserResponse{
-                user: User {
-                token: Some(encode_token(user.id)),
-                ..user
-            }};
+            let response = UserResponse { user };
             let body = serde_json::to_string(&response).expect("Failed to serialize user.");
             let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, body);
             future::ok((state, res))
-        },
+        }
         Ok(Err(diesel::result::Error::NotFound)) => {
             let res = create_empty_response(&state, StatusCode::UNAUTHORIZED);
             future::ok((state, res))
-        },
-        Err(e) => e.into_handler_error()
+        }
+        Ok(Err(e)) => future::err((state, e.into_handler_error())),
+        Err(e) => future::err((state, e.into_handler_error())),
     });
-    Box::new(f)
+    Box::new(results)
 }
 
 #[cfg(test)]
