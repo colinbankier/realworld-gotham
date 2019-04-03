@@ -1,4 +1,4 @@
-use crate::db::Repo;
+use crate::Repo;
 use crate::models::{NewUser, UpdateUser, User};
 use crate::schema::users;
 
@@ -45,6 +45,7 @@ pub fn find_by_email_password(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{ repo, Repo };
     use crate::test_helpers::generate;
     use fake::fake;
     use tokio_threadpool::ThreadPool;
@@ -52,7 +53,7 @@ mod tests {
     #[test]
     fn test_create_user() {
         let pool = ThreadPool::new();
-        let repo = Repo::new();
+        let repo = repo();
 
         let new_user = generate::new_user();
         let future = insert(repo.clone(), new_user).and_then(move |res| {
@@ -66,7 +67,7 @@ mod tests {
     #[test]
     fn test_authenticate_user() {
         let pool = ThreadPool::new();
-        let repo = Repo::new();
+        let repo = repo();
         // Create a new user
         let new_user = generate::new_user();
         let future = insert(repo.clone(), new_user).and_then(move |res| {

@@ -3,6 +3,7 @@ use log::{error, trace};
 use std::io;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::process;
+use diesel::Connection;
 
 use gotham::handler::HandlerFuture;
 use gotham::middleware::{Middleware, NewMiddleware};
@@ -10,19 +11,25 @@ use gotham::state::{request_id, State};
 
 use crate::db::Repo;
 
-pub struct DieselMiddleware {
-    repo: AssertUnwindSafe<Repo>,
+pub struct DieselMiddleware<T>
+ where T: Connection + 'static,
+ {
+    repo: AssertUnwindSafe<Repo<T>>,
 }
 
-impl DieselMiddleware {
-    pub fn new(repo: Repo) -> Self {
+impl<T> DieselMiddleware<T>
+ where T: Connection,
+ {
+    pub fn new(repo: Repo<T>) -> Self {
         DieselMiddleware {
             repo: AssertUnwindSafe(repo),
         }
     }
 }
 
-impl Clone for DieselMiddleware {
+impl<T> Clone for DieselMiddleware<T>
+where T: Connection + Clone + 'static ,
+ {
     fn clone(&self) -> Self {
         match catch_unwind(|| self.repo.clone()) {
             Ok(repo) => DieselMiddleware {
@@ -37,7 +44,9 @@ impl Clone for DieselMiddleware {
     }
 }
 
-impl NewMiddleware for DieselMiddleware {
+impl<T> NewMiddleware for DieselMiddleware<T>
+where T: Connection + Clone + 'static ,
+{
     type Instance = Self;
 
     fn new_middleware(&self) -> io::Result<Self::Instance> {
@@ -58,7 +67,9 @@ impl NewMiddleware for DieselMiddleware {
     }
 }
 
-impl Middleware for DieselMiddleware {
+impl<T> Middleware for DieselMiddleware<T>
+where T: Connection + Clone + 'static ,
+{
     fn call<Chain>(self, mut state: State, chain: Chain) -> Box<HandlerFuture>
     where
         Chain: FnOnce(State) -> Box<HandlerFuture> + 'static,

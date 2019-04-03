@@ -12,7 +12,10 @@ mod web;
 #[cfg(test)]
 mod test_helpers;
 
+use std::env;
+
 use dotenv::dotenv;
+use diesel::pg::PgConnection;
 use gotham::pipeline::new_pipeline;
 use gotham::pipeline::set::{finalize_pipeline_set, new_pipeline_set};
 use gotham::router::builder::*;
@@ -20,10 +23,11 @@ use gotham::router::Router;
 use gotham::state::State;
 use gotham_middleware_jwt::JWTMiddleware;
 
-use db::Repo;
 use diesel_middleware::DieselMiddleware;
 
 const HELLO_ROUTER: &str = "Hello Router!";
+
+pub type Repo = db::Repo<PgConnection>;
 
 pub fn say_hello(state: State) -> (State, &'static str) {
     (state, HELLO_ROUTER)
@@ -55,11 +59,16 @@ pub fn router(repo: Repo) -> Router {
     })
 }
 
+pub fn repo() -> Repo {
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+Repo::new(&database_url)
+}
+
 pub fn main() {
     dotenv().ok();
     env_logger::init();
     let addr = "127.0.0.1:7878";
     println!("Listening for requests at http://{}", addr);
 
-    gotham::start(addr, router(Repo::new()))
+    gotham::start(addr, router(repo()))
 }

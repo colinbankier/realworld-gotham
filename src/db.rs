@@ -21,18 +21,39 @@ where
     connection_pool: Pool<ConnectionManager<T>>,
 }
 
-impl<T> Repo<T> where T: Connection {
-    pub fn new() -> Self {
+impl<T> Repo<T> where T: Connection + 'static {
+    pub fn new(database_url: &str) -> Self {
         Repo {
-            connection_pool: connection_pool(),
+            connection_pool: Repo::connection_pool(database_url),
         }
     }
 
+pub fn connection_pool(database_url: &str) -> Pool<ConnectionManager<T>> {
+    // let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let manager = ConnectionManager::new(database_url);
+    Repo::configure_pool(manager)
+}
+
+#[cfg(test)]
+fn configure_pool(manager: ConnectionManager<T>) -> Pool<ConnectionManager<T>> {
+    use crate::test_helpers::TestConnectionCustomizer;
+    let customizer = TestConnectionCustomizer {};
+
+    Pool::builder()
+        .connection_customizer(Box::new(customizer))
+        .build(manager)
+        .expect("could not initiate test db pool")
+}
+
+#[cfg(not(test))]
+fn configure_pool(manager: ConnectionManager<T>) -> Pool<ConnectionManager<T>> {
+    Pool::new(manager).expect("could not initiate db pool")
+}
     /// Runs the given closure in a way that is safe for blocking IO to the database.
     /// The closure will be passed a `Connection` from the pool to use.
     pub fn run<F, R>(&self, f: F) -> impl Future<Item = R, Error = BlockingError>
     where
-        F: FnOnce(Connection) -> R + Send + std::marker::Unpin + 'static,
+        F: FnOnce(PooledConnection<ConnectionManager<T>>) -> R + Send + std::marker::Unpin + 'static,
         T: Send + 'static,
     {
         let pool = self.connection_pool.clone();
@@ -47,26 +68,5 @@ impl<T> Repo<T> where T: Connection {
     }
 }
 
-impl StateData for Repo {}
+impl<T> StateData for Repo<T> where T:Connection {}
 
-pub fn connection_pool() -> ConnectionPool {
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let manager = ConnectionManager::new(database_url);
-    configure_pool(manager)
-}
-
-#[cfg(test)]
-fn configure_pool(manager: ConnectionManager<PgConnection>) -> ConnectionPool {
-    use crate::test_helpers::TestConnectionCustomizer;
-    let customizer = TestConnectionCustomizer {};
-
-    Pool::builder()
-        .connection_customizer(Box::new(customizer))
-        .build(manager)
-        .expect("could not initiate test db pool")
-}
-
-#[cfg(not(test))]
-fn configure_pool(manager: ConnectionManager<PgConnection>) -> ConnectionPool {
-    Pool::new(manager).expect("could not initiate db pool")
-}

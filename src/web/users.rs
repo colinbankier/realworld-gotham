@@ -131,7 +131,7 @@ pub fn get_user(mut state: State) -> Box<HandlerFuture> {
 mod tests {
     use crate::db::Repo;
     use crate::models::NewUser;
-    use crate::router;
+    use crate::{ router, repo };
     use crate::test_helpers::generate;
     use futures::future::Future;
     use futures::stream::Stream;
@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn register_and_login() {
-        let server = TestServer::new(router(Repo::new())).unwrap();
+        let server = TestServer::new(router(repo())).unwrap();
         let user = generate::new_user();
 
         register_user(&server, &user);
