@@ -17,6 +17,13 @@ pub struct DieselMiddleware<T>
     repo: AssertUnwindSafe<Repo<T>>,
 }
 
+#[derive(Clone)]
+pub struct DieselMiddlewareImpl<T>
+ where T: Connection + 'static,
+ {
+    repo: Repo<T>,
+}
+
 impl<T> DieselMiddleware<T>
  where T: Connection,
  {
@@ -28,7 +35,7 @@ impl<T> DieselMiddleware<T>
 }
 
 impl<T> Clone for DieselMiddleware<T>
-where T: Connection + Clone + 'static ,
+where T: Connection + 'static ,
  {
     fn clone(&self) -> Self {
         match catch_unwind(|| self.repo.clone()) {
@@ -45,14 +52,14 @@ where T: Connection + Clone + 'static ,
 }
 
 impl<T> NewMiddleware for DieselMiddleware<T>
-where T: Connection + Clone + 'static ,
+where T: Connection + 'static ,
 {
-    type Instance = Self;
+    type Instance = DieselMiddlewareImpl<T>;
 
     fn new_middleware(&self) -> io::Result<Self::Instance> {
         match catch_unwind(|| self.repo.clone()) {
-            Ok(repo) => Ok(DieselMiddleware {
-                repo: AssertUnwindSafe(repo),
+            Ok(repo) => Ok(DieselMiddlewareImpl {
+                repo: repo,
             }),
             Err(_) => {
                 error!(
@@ -68,12 +75,33 @@ where T: Connection + Clone + 'static ,
 }
 
 impl<T> Middleware for DieselMiddleware<T>
-where T: Connection + Clone + 'static ,
+where T: Connection + 'static ,
 {
     fn call<Chain>(self, mut state: State, chain: Chain) -> Box<HandlerFuture>
     where
         Chain: FnOnce(State) -> Box<HandlerFuture> + 'static,
         Self: Sized,
+    {
+        trace!("[{}] pre chain", request_id(&state));
+        state.put(self.repo.clone());
+
+        let f = chain(state).and_then(move |(state, response)| {
+            {
+                trace!("[{}] post chain", request_id(&state));
+            }
+            future::ok((state, response))
+        });
+        Box::new(f)
+    }
+}
+
+impl<T> Middleware for DieselMiddlewareImpl<T>
+where
+    T: Connection + 'static,
+{
+    fn call<Chain>(self, mut state: State, chain: Chain) -> Box<HandlerFuture>
+    where
+        Chain: FnOnce(State) -> Box<HandlerFuture>,
     {
         trace!("[{}] pre chain", request_id(&state));
         state.put(self.repo.clone());
