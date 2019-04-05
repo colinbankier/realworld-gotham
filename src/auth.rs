@@ -18,10 +18,6 @@ impl Claims {
     }
 }
 
-fn validation() -> Validation {
-    Validation::default()
-}
-
 pub fn encode_token(sub: i32) -> String {
     encode(&Header::default(), &claims_for(sub, 3600), SECRET.as_ref()).unwrap()
 }

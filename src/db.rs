@@ -1,10 +1,8 @@
-use diesel::pg::PgConnection;
 use diesel::r2d2::ConnectionManager;
 use diesel::Connection;
 use futures::future::{poll_fn, Future};
 use gotham_derive::StateData;
 use r2d2::{Pool, PooledConnection};
-use std::env;
 use tokio_threadpool::{blocking, BlockingError};
 
 // pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
@@ -43,7 +41,6 @@ where
     }
 
     pub fn connection_pool(database_url: &str) -> Pool<ConnectionManager<T>> {
-        // let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
         let manager = ConnectionManager::new(database_url);
         Repo::configure_pool(manager)
     }
@@ -79,9 +76,7 @@ where
         // `f.take()` allows the borrow checker to be sure `f` is not moved into the inner closure
         // multiple times if `poll_fn` is called multple times.
         let mut f = Some(f);
-        poll_fn(
-            move || blocking(|| (f.take().unwrap())(pool.get().unwrap())), // .map_err(|_| panic!("the threadpool shut down"))
-        )
+        poll_fn(move || blocking(|| (f.take().unwrap())(pool.get().unwrap())))
     }
 }
 
