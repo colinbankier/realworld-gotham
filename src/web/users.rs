@@ -1,10 +1,10 @@
+use futures::{future, Future, Stream};
 use gotham::handler::{HandlerError, HandlerFuture, IntoHandlerError};
 use gotham::helpers::http::response::{create_empty_response, create_response};
 use gotham::state::{FromState, State};
 use gotham_middleware_jwt::AuthorizationToken;
 use hyper::{Body, StatusCode};
-extern crate mime;
-use futures::{future, Future, Stream};
+use mime;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use std::str::from_utf8;
