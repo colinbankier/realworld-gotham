@@ -12,15 +12,15 @@ mod test_helpers;
 
 use std::env;
 
-use dotenv::dotenv;
 use diesel::pg::PgConnection;
+use dotenv::dotenv;
 use gotham::pipeline::new_pipeline;
 use gotham::pipeline::set::{finalize_pipeline_set, new_pipeline_set};
 use gotham::router::builder::*;
 use gotham::router::Router;
 use gotham::state::State;
-use gotham_middleware_jwt::JWTMiddleware;
 use gotham_middleware_diesel::{self, DieselMiddleware};
+use gotham_middleware_jwt::JWTMiddleware;
 
 const HELLO_ROUTER: &str = "Hello Router!";
 
@@ -58,7 +58,7 @@ pub fn router(repo: Repo) -> Router {
 
 pub fn repo() -> Repo {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-Repo::new(&database_url)
+    Repo::new(&database_url)
 }
 
 pub fn main() {
