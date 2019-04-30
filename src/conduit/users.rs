@@ -3,12 +3,10 @@ use crate::schema::users;
 use crate::Repo;
 
 use diesel::prelude::*;
+use diesel::result::Error as dieselError;
 use futures::Future;
-use tokio_threadpool::BlockingError;
 
-type UserResult = Result<User, diesel::result::Error>;
-
-pub fn insert(repo: Repo, user: NewUser) -> impl Future<Item = UserResult, Error = BlockingError> {
+pub fn insert(repo: Repo, user: NewUser) -> impl Future<Item = User, Error = dieselError> {
     repo.run(move |conn| {
         // TODO: store password not in plain text, later
         diesel::insert_into(users::table)
@@ -17,7 +15,7 @@ pub fn insert(repo: Repo, user: NewUser) -> impl Future<Item = UserResult, Error
     })
 }
 
-pub fn find(repo: Repo, user_id: i32) -> impl Future<Item = UserResult, Error = BlockingError> {
+pub fn find(repo: Repo, user_id: i32) -> impl Future<Item = User, Error = dieselError> {
     use crate::schema::users::dsl::*;
     repo.run(move |conn| users.find(user_id).first(&conn))
 }
@@ -26,7 +24,7 @@ pub fn find_by_email_password(
     repo: Repo,
     user_email: String,
     user_password: String,
-) -> impl Future<Item = UserResult, Error = BlockingError> {
+) -> impl Future<Item = User, Error = dieselError> {
     use crate::schema::users::dsl::*;
     repo.run(|conn| {
         users
@@ -49,10 +47,8 @@ mod tests {
         let repo = repo();
 
         let new_user = generate::new_user();
-        let future = insert(repo.clone(), new_user).and_then(move |res| {
-            let user = res.expect("Failed to insert user");
-            find(repo.clone(), user.id)
-        });
+        let future =
+            insert(repo.clone(), new_user).and_then(move |user| find(repo.clone(), user.id));
         let results = wait_for(&pool, future);
         assert!(results.is_ok());
     }
@@ -63,10 +59,8 @@ mod tests {
         let repo = repo();
         // Create a new user
         let new_user = generate::new_user();
-        let future = insert(repo.clone(), new_user).and_then(move |res| {
-            let user = res.expect("Create user failed.");
-            find_by_email_password(repo.clone(), user.email, user.password)
-        });
+        let future = insert(repo.clone(), new_user)
+            .and_then(move |user| find_by_email_password(repo.clone(), user.email, user.password));
 
         // Check the user is in the database.
         let results = wait_for(&pool, future);
@@ -75,11 +69,11 @@ mod tests {
 
     fn wait_for<T>(
         pool: &ThreadPool,
-        future: impl Future<Item = T, Error = BlockingError> + Send + 'static,
-    ) -> T
+        future: impl Future<Item = T, Error = dieselError> + Send + 'static,
+    ) -> Result<T, dieselError>
     where
         T: Send + 'static,
     {
-        pool.spawn_handle(future).wait().unwrap()
+        pool.spawn_handle(future).wait()
     }
 }

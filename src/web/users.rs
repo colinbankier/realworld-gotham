@@ -11,8 +11,8 @@ use std::str::from_utf8;
 
 use crate::auth::{encode_token, Claims};
 use crate::conduit::users;
-use crate::db::Repo;
 use crate::models::{NewUser, User};
+use crate::Repo;
 
 #[derive(Deserialize, Debug)]
 pub struct Registration {
@@ -64,14 +64,11 @@ pub fn register(mut state: State) -> Box<HandlerFuture> {
             users::insert(repo, registration.user).map_err(|e| e.into_handler_error())
         })
         .then(|result| match result {
-            Ok(user_result) => match user_result {
-                Ok(user) => {
-                    let body = serde_json::to_string(&user).expect("Failed to serialize user.");
-                    let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, body);
-                    future::ok((state, res))
-                }
-                Err(e) => future::err((state, e.into_handler_error())),
-            },
+            Ok(user) => {
+                let body = serde_json::to_string(&user).expect("Failed to serialize user.");
+                let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, body);
+                future::ok((state, res))
+            }
             Err(e) => future::err((state, e.into_handler_error())),
         });
     Box::new(f)
@@ -82,11 +79,15 @@ pub fn login(mut state: State) -> Box<HandlerFuture> {
     let f = extract_json::<AuthRequest>(&mut state)
         .and_then(move |body| {
             let user = body.user;
-            users::find_by_email_password(repo, user.email, user.password)
-                .map_err(|e| e.into_handler_error())
+            users::find_by_email_password(repo, user.email, user.password).map_err(|e| match e {
+                diesel::result::Error::NotFound => {
+                    e.into_handler_error().with_status(StatusCode::UNAUTHORIZED)
+                }
+                e => e.into_handler_error(),
+            })
         })
         .then(|result| match result {
-            Ok(Ok(user)) => {
+            Ok(user) => {
                 let response = UserResponse {
                     user: User {
                         token: Some(encode_token(user.id)),
@@ -97,12 +98,7 @@ pub fn login(mut state: State) -> Box<HandlerFuture> {
                 let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, body);
                 future::ok((state, res))
             }
-            Ok(Err(diesel::result::Error::NotFound)) => {
-                let res = create_empty_response(&state, StatusCode::UNAUTHORIZED);
-                future::ok((state, res))
-            }
-            Ok(Err(e)) => future::err((state, e.into_handler_error())),
-            Err(e) => future::err((state, e.into_handler_error())),
+            Err(e) => future::err((state, e)),
         });
     Box::new(f)
 }
@@ -111,17 +107,16 @@ pub fn get_user(state: State) -> Box<HandlerFuture> {
     let repo = Repo::borrow_from(&state).clone();
     let token = AuthorizationToken::<Claims>::borrow_from(&state);
     let results = users::find(repo.clone(), token.0.claims.user_id()).then(|result| match result {
-        Ok(Ok(user)) => {
+        Ok(user) => {
             let response = UserResponse { user };
             let body = serde_json::to_string(&response).expect("Failed to serialize user.");
             let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, body);
             future::ok((state, res))
         }
-        Ok(Err(diesel::result::Error::NotFound)) => {
+        Err(diesel::result::Error::NotFound) => {
             let res = create_empty_response(&state, StatusCode::UNAUTHORIZED);
             future::ok((state, res))
         }
-        Ok(Err(e)) => future::err((state, e.into_handler_error())),
         Err(e) => future::err((state, e.into_handler_error())),
     });
     Box::new(results)

@@ -3,8 +3,6 @@ extern crate diesel;
 
 mod auth;
 mod conduit;
-mod db;
-mod diesel_middleware;
 mod models;
 mod schema;
 mod web;
@@ -22,12 +20,11 @@ use gotham::router::builder::*;
 use gotham::router::Router;
 use gotham::state::State;
 use gotham_middleware_jwt::JWTMiddleware;
-
-use diesel_middleware::DieselMiddleware;
+use gotham_middleware_diesel::{self, DieselMiddleware};
 
 const HELLO_ROUTER: &str = "Hello Router!";
 
-pub type Repo = db::Repo<PgConnection>;
+pub type Repo = gotham_middleware_diesel::Repo<PgConnection>;
 
 pub fn say_hello(state: State) -> (State, &'static str) {
     (state, HELLO_ROUTER)
