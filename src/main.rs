@@ -14,6 +14,7 @@ use std::env;
 
 use diesel::pg::PgConnection;
 use dotenv::dotenv;
+use gotham::middleware::logger::RequestLogger;
 use gotham::pipeline::new_pipeline;
 use gotham::pipeline::set::{finalize_pipeline_set, new_pipeline_set};
 use gotham::router::builder::*;
@@ -32,8 +33,12 @@ pub fn say_hello(state: State) -> (State, &'static str) {
 
 pub fn router(repo: Repo) -> Router {
     let pipelines = new_pipeline_set();
-    let (pipelines, default) =
-        pipelines.add(new_pipeline().add(DieselMiddleware::new(repo)).build());
+    let (pipelines, default) = pipelines.add(
+        new_pipeline()
+            .add(DieselMiddleware::new(repo))
+            .add(RequestLogger::new(log::Level::Info))
+            .build(),
+    );
     let (pipelines, authenticated) = pipelines.add(
         new_pipeline()
             // Need to customize realm, as per Guardian.VerifyHeader

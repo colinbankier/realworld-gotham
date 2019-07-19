@@ -37,7 +37,7 @@ Setup database using diesel cli
 ```
 diesel database setup
 ```
-Run the app
+Run the app (with logging output)
 ```
-cargo run
+RUST_LOG=realworld_gotham=debug cargo run
 ```

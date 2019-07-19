@@ -4,6 +4,7 @@ use gotham::helpers::http::response::{create_empty_response, create_response};
 use gotham::state::{FromState, State};
 use gotham_middleware_jwt::AuthorizationToken;
 use hyper::{Body, StatusCode};
+use log::debug;
 use mime;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
@@ -61,15 +62,22 @@ pub fn register(mut state: State) -> Box<HandlerFuture> {
     let repo = Repo::borrow_from(&state).clone();
     let f = extract_json::<Registration>(&mut state)
         .and_then(|registration| {
-            users::insert(repo, registration.user).map_err(|e| e.into_handler_error())
+            users::insert(repo, registration.user).map_err(|e| match e {
+                diesel::result::Error::DatabaseError(_, _) => {
+                    debug!("Could not register user: {:?}", e);
+                    e.into_handler_error().with_status(StatusCode::BAD_REQUEST)
+                }
+                _ => e.into_handler_error(),
+            })
         })
         .then(|result| match result {
             Ok(user) => {
-                let body = serde_json::to_string(&user).expect("Failed to serialize user.");
+                let body = serde_json::to_string(&UserResponse { user })
+                    .expect("Failed to serialize user.");
                 let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, body);
                 future::ok((state, res))
             }
-            Err(e) => future::err((state, e.into_handler_error())),
+            Err(e) => future::err((state, e)),
         });
     Box::new(f)
 }
