@@ -1,10 +1,10 @@
-use jsonwebtoken::{encode, Header, Validation};
+use jsonwebtoken::{encode, Header};
 use serde_derive::{Deserialize, Serialize};
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // TODO: get the secret from config
-const SECRET: &str = "secret";
+pub const SECRET: &str = "notsosecret";
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Claims {

@@ -96,6 +96,7 @@ pub fn login(mut state: State) -> Box<HandlerFuture> {
         })
         .then(|result| match result {
             Ok(user) => {
+                debug!("Logged in user id: {}", user.id);
                 let response = UserResponse {
                     user: User {
                         token: Some(encode_token(user.id)),
@@ -114,7 +115,8 @@ pub fn login(mut state: State) -> Box<HandlerFuture> {
 pub fn get_user(state: State) -> Box<HandlerFuture> {
     let repo = Repo::borrow_from(&state).clone();
     let token = AuthorizationToken::<Claims>::borrow_from(&state);
-    let results = users::find(repo.clone(), token.0.claims.user_id()).then(|result| match result {
+    let user_id = token.0.claims.user_id();
+    let results = users::find(repo.clone(), user_id).then(|result| match result {
         Ok(user) => {
             let response = UserResponse { user };
             let body = serde_json::to_string(&response).expect("Failed to serialize user.");

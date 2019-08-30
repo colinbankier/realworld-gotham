@@ -24,6 +24,7 @@ use gotham_middleware_diesel::{self, DieselMiddleware};
 use gotham_middleware_jwt::JWTMiddleware;
 
 const HELLO_ROUTER: &str = "Hello Router!";
+const AUTH_SCHEME: &str = "Token";
 
 pub type Repo = gotham_middleware_diesel::Repo<PgConnection>;
 
@@ -41,8 +42,7 @@ pub fn router(repo: Repo) -> Router {
     );
     let (pipelines, authenticated) = pipelines.add(
         new_pipeline()
-            // Need to customize realm, as per Guardian.VerifyHeader
-            .add(JWTMiddleware::<auth::Claims>::new("secret"))
+            .add(JWTMiddleware::<auth::Claims>::new(auth::SECRET).scheme(AUTH_SCHEME))
             .build(),
     );
     let pipeline_set = finalize_pipeline_set(pipelines);

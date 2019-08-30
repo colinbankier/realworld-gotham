@@ -403,8 +403,8 @@ dependencies = [
 
 [[package]]
 name = "gotham_middleware_jwt"
-version = "0.3.2"
-source = "git+https://github.com/gotham-rs/gotham?branch=0.4-maint#ed2986345c4f8fc90b6ab0a88144eee00eb0f9a8"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "futures 0.1.28 (registry+https://github.com/rust-lang/crates.io-index)",
  "gotham 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1007,7 +1007,7 @@ dependencies = [
  "gotham 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gotham_derive 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gotham_middleware_diesel 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "gotham_middleware_jwt 0.3.2 (git+https://github.com/gotham-rs/gotham?branch=0.4-maint)",
+ "gotham_middleware_jwt 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.12.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonwebtoken 6.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1705,7 +1705,7 @@ dependencies = [
 "checksum gotham 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bb734995f768833f633d6acaee1fe768e1395dafc75362a2dac404ba32d7883a"
 "checksum gotham_derive 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b207d2aa120b2d7be4bb7edc48b199297ebce4227979127b0879890a84163480"
 "checksum gotham_middleware_diesel 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "abcac581adb76833f3428164adb058f959c52fffba2bafe5928d9fab85a5dbda"
-"checksum gotham_middleware_jwt 0.3.2 (git+https://github.com/gotham-rs/gotham?branch=0.4-maint)" = "<none>"
+"checksum gotham_middleware_jwt 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "64345ab259d61ece2ee3bddc49028f16a9902de856b4733b4a4c697759170fee"
 "checksum h2 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)" = "a5b34c246847f938a410a03c5458c7fee2274436675e76d8b903c08efc29c462"
 "checksum http 0.1.18 (registry+https://github.com/rust-lang/crates.io-index)" = "372bcb56f939e449117fb0869c2e8fd8753a8223d92a172c6e808cf123a5b6e4"
 "checksum http-body 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6741c859c1b2463a423a1dbce98d418e6c3c3fc720fb0d45528657320920292d"
